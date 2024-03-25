@@ -78,6 +78,8 @@ const createWindow = async () => {
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
         : path.join(__dirname, '../../.erb/dll/preload.js'),
+      // this is needed for the monaco webworkers to load in dev mode should not be needed for prod
+      webSecurity: false,
     },
   });
 
