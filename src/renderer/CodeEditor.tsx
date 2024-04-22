@@ -3,9 +3,8 @@ import { UserConfig } from 'monaco-editor-wrapper';
 import { MonacoEditorReactComp } from '@typefox/monaco-editor-react';
 import { useWorkerFactory } from 'monaco-editor-wrapper/workerFactory';
 import { MonacoLanguageClient } from 'monaco-languageclient';
-import getTextmateServiceOverride from '@codingame/monaco-vscode-textmate-service-override';
-import getThemeServiceOverride from '@codingame/monaco-vscode-theme-service-override';
 import { URI } from 'vscode-uri';
+import { editor as mEditor, IRange } from 'monaco-editor';
 
 export const configureMonacoWorkers = () => {
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -18,14 +17,16 @@ const pluginConfig = {
   settings: {
     pylsp: {
       plugins: {
+        // jedi_definition: { enabled: false }, // "go to definition" context action
         pycodestyle: { ignore: ['W605', 'E501', 'E402', 'E722'] },
       },
     },
   },
 };
 
-export const createUserConfig = (code: string): UserConfig => {
-  return {
+/* istanbul ignore next: we mock the whole  editor so there isnt much to test */
+function getUserConfig(code: string, fileUri: string) {
+  const userConfig: UserConfig = {
     languageClientConfig: {
       options: {
         name: 'Python Language Server',
@@ -38,7 +39,7 @@ export const createUserConfig = (code: string): UserConfig => {
           onCall: (languageClient?: MonacoLanguageClient) => {
             languageClient?.sendRequest(
               'workspace/didChangeConfiguration',
-              pluginConfig
+              pluginConfig,
             );
           },
           reportStatus: true,
@@ -49,47 +50,20 @@ export const createUserConfig = (code: string): UserConfig => {
         workspaceFolder: {
           index: 0,
           name: 'workspace',
-          uri: URI.file(''),
+          uri: URI.file(fileUri),
         },
       },
     },
     wrapperConfig: {
       serviceConfig: {
-        userServices: {
-          ...getTextmateServiceOverride(),
-          ...getThemeServiceOverride(),
-        },
         debugLogging: true,
       },
       editorAppConfig: {
         $type: 'extended',
         languageId: 'python',
-        codeUri: '/workspace/python.py',
-        extensions: [
-          {
-            config: {
-              name: 'python-client',
-              publisher: 'monaco-languageclient-project',
-              version: '1.0.0',
-              engines: {
-                vscode: '^1.85.0',
-              },
-              contributes: {
-                languages: [
-                  {
-                    id: 'python',
-                    extensions: ['.py', 'pyi'],
-                    aliases: ['python'],
-                    mimetypes: ['application/python'],
-                  },
-                ],
-              },
-            },
-          },
-        ],
         userConfiguration: {
           json: JSON.stringify({
-            'workbench.colorTheme': 'Default Light Modern',
+            'workbench.colorTheme': 'Visual Studio Light',
           }),
         },
         useDiffEditor: false,
@@ -97,7 +71,10 @@ export const createUserConfig = (code: string): UserConfig => {
       },
     },
   };
-};
+
+  return userConfig;
+}
+
 export default function CodeEditor() {
   /**
    * Code is intentionally incorrect - language server will pick this up on connection and highlight the error
@@ -105,20 +82,34 @@ export default function CodeEditor() {
   const code = `def main():
         return pass`;
 
-  const onTextChanged = (text: string, isDirty: boolean) => {
-    console.log(`Dirty? ${isDirty} Content: ${text}`);
-  };
-
   return (
     <div style={{ height: '100%', overflow: 'hidden' }}>
       <MonacoEditorReactComp
-        userConfig={createUserConfig(code)}
+        userConfig={getUserConfig(code, '/test')}
         style={{
           height: '100%',
         }}
-        onTextChanged={onTextChanged}
         onLoad={() => {
           console.log('Loaded');
+          mEditor.registerLinkOpener({
+            open(resource): boolean | Promise<boolean> {
+              console.log('registerLinkOpener', resource);
+
+              return true;
+            },
+          });
+          mEditor.registerEditorOpener({
+            openCodeEditor(
+              source,
+              resource,
+              selectionOrPosition?,
+            ): boolean | Promise<boolean> {
+              console.log('registerEditorOpener', resource);
+              window.alert('registerEditorOpener called!');
+
+              return true;
+            },
+          });
         }}
         onError={(e) => {
           console.error(e);
